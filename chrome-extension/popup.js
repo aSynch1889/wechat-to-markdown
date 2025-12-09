@@ -365,3 +365,139 @@ function extractHistoryArticles() {
     articles
   };
 }
+
+// 工具函数
+function showStatus(message, type = 'info') {
+  const status = document.getElementById('status');
+  if (!status) return;
+  
+  status.textContent = message;
+  status.className = type;
+  status.style.display = 'block';
+  
+  if (type === 'success') {
+    setTimeout(() => {
+      status.style.display = 'none';
+    }, 3000);
+  }
+}
+
+function showProgress(current, total) {
+  const progressSection = document.getElementById('progressSection');
+  if (progressSection) {
+    progressSection.style.display = 'block';
+  }
+  updateProgress(current, total);
+}
+
+function updateProgress(current, total) {
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+  
+  if (progressFill && progressText) {
+    const percent = Math.round((current / total) * 100);
+    progressFill.style.width = percent + '%';
+    progressText.textContent = `${current} / ${total} (${percent}%)`;
+  }
+}
+
+function hideProgress() {
+  const progressSection = document.getElementById('progressSection');
+  if (progressSection) {
+    progressSection.style.display = 'none';
+  }
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// HTML转Markdown
+function convertToMarkdown(article) {
+  let markdown = `# ${article.title}\n\n`;
+  
+  if (article.author) {
+    markdown += `**作者**: ${article.author}\n\n`;
+  }
+  
+  if (article.publishTime) {
+    markdown += `**发布时间**: ${article.publishTime}\n\n`;
+  }
+  
+  markdown += `**原文链接**: ${article.url}\n\n---\n\n`;
+  
+  let content = article.content || '';
+  
+  // 移除script和style标签
+  content = content.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  content = content.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+  
+  // 标题
+  content = content.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n');
+  content = content.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n');
+  content = content.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n');
+  content = content.replace(/<h4[^>]*>(.*?)<\/h4>/gi, '#### $1\n\n');
+  
+  // 粗体斜体
+  content = content.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**');
+  content = content.replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**');
+  content = content.replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*');
+  
+  // 链接
+  content = content.replace(/<a[^>]*href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi, '[$2]($1)');
+  
+  // 图片 - 优先data-src
+  content = content.replace(/<img[^>]*data-src=["']([^"']*)["'][^>]*>/gi, '![]($1)\n');
+  content = content.replace(/<img[^>]*src=["']([^"']*)["'][^>]*>/gi, '![]($1)\n');
+  
+  // 段落
+  content = content.replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n');
+  content = content.replace(/<br\s*\/?>/gi, '\n');
+  
+  // 列表
+  content = content.replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n');
+  
+  // 引用
+  content = content.replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gi, '> $1\n\n');
+  
+  // 代码
+  content = content.replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`');
+  
+  // 移除所有HTML标签
+  content = content.replace(/<[^>]+>/g, '');
+  
+  // HTML实体解码
+  content = content.replace(/&nbsp;/g, ' ');
+  content = content.replace(/&lt;/g, '<');
+  content = content.replace(/&gt;/g, '>');
+  content = content.replace(/&amp;/g, '&');
+  content = content.replace(/&quot;/g, '"');
+  
+  // 清理多余空行
+  content = content.replace(/\n{3,}/g, '\n\n');
+  
+  markdown += content.trim();
+  return markdown;
+}
+
+// 下载Markdown文件
+async function downloadMarkdown(content, filename) {
+  filename = filename.replace(/[\\/*?:"<>|]/g, '').substring(0, 100);
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  
+  return new Promise((resolve, reject) => {
+    chrome.downloads.download({
+      url: url,
+      filename: `${filename}.md`,
+      saveAs: false
+    }, (downloadId) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        resolve(downloadId);
+      }
+    });
+  });
+}
