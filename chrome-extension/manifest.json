@@ -1,13 +1,18 @@
 {
     "manifest_version": 3,
     "name": "微信公众号转Markdown",
-    "version": "1.0",
-    "description": "一键将微信公众号文章转换为Markdown格式",
-"permissions": [
-  "activeTab",
-  "scripting",
-  "downloads"
-],
+    "version": "2.0",
+    "description": "一键将微信公众号文章转换为Markdown格式，支持批量下载和公众号历史文章获取",
+    "permissions": [
+      "activeTab",
+      "scripting",
+      "downloads",
+      "storage",
+      "tabs"
+    ],
+    "host_permissions": [
+      "https://mp.weixin.qq.com/*"
+    ],
     "action": {
       "default_popup": "popup.html",
       "default_icon": {
@@ -16,6 +21,16 @@
         "128": "icon128.png"
       }
     },
+    "background": {
+      "service_worker": "background.js"
+    },
+    "content_scripts": [
+      {
+        "matches": ["https://mp.weixin.qq.com/mp/profile_ext*"],
+        "js": ["content.js"],
+        "run_at": "document_idle"
+      }
+    ],
     "icons": {
       "16": "icon16.png",
       "48": "icon48.png",

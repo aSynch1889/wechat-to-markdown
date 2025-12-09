@@ -3,17 +3,61 @@
 <head>
   <meta charset="UTF-8">
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
     body {
-      width: 300px;
+      width: 450px;
+      max-height: 600px;
       padding: 20px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-      margin: 0;
+      overflow-y: auto;
     }
+    
     h2 {
       margin: 0 0 15px 0;
       font-size: 18px;
       color: #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
+    
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 15px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    
+    .tab {
+      padding: 8px 16px;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #6b7280;
+      transition: all 0.2s;
+    }
+    
+    .tab.active {
+      color: #1a73e8;
+      border-bottom-color: #1a73e8;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
     button {
       width: 100%;
       padding: 12px;
@@ -25,14 +69,34 @@
       cursor: pointer;
       font-weight: 500;
       transition: background 0.2s;
+      margin-bottom: 8px;
     }
-    button:hover {
+    
+    button:hover:not(:disabled) {
       background: #1557b0;
     }
+    
     button:disabled {
       background: #ccc;
       cursor: not-allowed;
     }
+    
+    .btn-secondary {
+      background: #6366f1;
+    }
+    
+    .btn-secondary:hover:not(:disabled) {
+      background: #4f46e5;
+    }
+    
+    .btn-warning {
+      background: #f59e0b;
+    }
+    
+    .btn-warning:hover:not(:disabled) {
+      background: #d97706;
+    }
+    
     #status {
       margin-top: 15px;
       padding: 10px;
@@ -40,27 +104,274 @@
       font-size: 13px;
       display: none;
     }
+    
     .success {
       background: #e8f5e9;
       color: #2e7d32;
       border: 1px solid #81c784;
     }
+    
     .error {
       background: #ffebee;
       color: #c62828;
       border: 1px solid #ef5350;
     }
+    
     .info {
       background: #e3f2fd;
       color: #1565c0;
       border: 1px solid #64b5f6;
     }
+    
+    .warning {
+      background: #fff3e0;
+      color: #e65100;
+      border: 1px solid #ffb74d;
+    }
+    
+    .batch-section {
+      margin-top: 15px;
+    }
+    
+    .url-input {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #e5e7eb;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 8px;
+      font-family: inherit;
+    }
+    
+    .url-input:focus {
+      outline: none;
+      border-color: #1a73e8;
+    }
+    
+    textarea.url-input {
+      min-height: 100px;
+      resize: vertical;
+    }
+    
+    .hint {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 5px;
+      margin-bottom: 10px;
+    }
+    
+    .article-list {
+      max-height: 350px;
+      overflow-y: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      margin: 10px 0;
+    }
+    
+    .article-item {
+      padding: 10px;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      align-items: start;
+      gap: 10px;
+      transition: background 0.2s;
+    }
+    
+    .article-item:hover {
+      background: #f9fafb;
+    }
+    
+    .article-item:last-child {
+      border-bottom: none;
+    }
+    
+    .article-checkbox {
+      margin-top: 2px;
+      cursor: pointer;
+    }
+    
+    .article-info {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .article-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: #333;
+      margin-bottom: 4px;
+      word-wrap: break-word;
+    }
+    
+    .article-meta {
+      font-size: 11px;
+      color: #6b7280;
+    }
+    
+    .select-controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    
+    .select-controls button {
+      flex: 1;
+      padding: 6px;
+      font-size: 12px;
+      background: #f3f4f6;
+      color: #374151;
+    }
+    
+    .select-controls button:hover {
+      background: #e5e7eb;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #6b7280;
+    }
+    
+    .loading::after {
+      content: '...';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+    
+    @keyframes dots {
+      0%, 20% { content: '.'; }
+      40% { content: '..'; }
+      60%, 100% { content: '...'; }
+    }
+    
+    .account-info {
+      padding: 12px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    
+    .account-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+    
+    .account-meta {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 3px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #1a73e8, #4f46e5);
+      transition: width 0.3s;
+    }
+    
+    .progress-text {
+      font-size: 12px;
+      color: #6b7280;
+      text-align: center;
+      margin-top: 5px;
+    }
+    
+    .instruction-box {
+      background: #fef3c7;
+      border: 1px solid #fbbf24;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    
+    .instruction-box strong {
+      color: #92400e;
+    }
+    
+    .step-list {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+    
+    .step-list li {
+      margin: 4px 0;
+      color: #78350f;
+    }
   </style>
 </head>
 <body>
-  <h2>📄 转换为Markdown</h2>
-  <button id="convertBtn">转换当前页面</button>
+  <h2>📄 微信转Markdown</h2>
+  
+  <div class="tabs">
+    <button class="tab active" data-tab="single">单篇</button>
+    <button class="tab" data-tab="batch">批量</button>
+    <button class="tab" data-tab="account">公众号</button>
+  </div>
+  
+  <!-- 单篇转换 -->
+  <div class="tab-content active" id="single">
+    <button id="convertBtn">转换当前页面</button>
+  </div>
+  
+  <!-- 批量转换 -->
+  <div class="tab-content" id="batch">
+    <textarea 
+      id="batchUrls" 
+      class="url-input" 
+      placeholder="粘贴多个文章链接，每行一个"
+    ></textarea>
+    <p class="hint">💡 每行输入一个文章链接</p>
+    <button id="batchConvertBtn">开始批量转换</button>
+  </div>
+  
+  <!-- 公众号历史文章 -->
+  <div class="tab-content" id="account">
+    <div class="instruction-box">
+      <strong>📖 使用说明：</strong>
+      <ol class="step-list">
+        <li>在任意公众号文章页面点击"打开历史页"</li>
+        <li>等待历史页面加载完成</li>
+        <li>点击"获取文章列表"按钮</li>
+        <li>勾选需要的文章，批量下载</li>
+      </ol>
+    </div>
+    
+    <button id="openHistoryBtn" class="btn-warning">📱 打开历史文章页面</button>
+    <button id="fetchAccountBtn" class="btn-secondary">📋 获取文章列表</button>
+    
+    <div id="accountInfo" style="display: none;"></div>
+    <div id="articleList" style="display: none;">
+      <div class="select-controls">
+        <button id="selectAllBtn">全选</button>
+        <button id="selectNoneBtn">取消</button>
+        <button id="selectInvertBtn">反选</button>
+      </div>
+      <div class="article-list" id="articleListContent"></div>
+      <button id="downloadSelectedBtn">下载选中文章</button>
+    </div>
+    <div id="loadingArticles" class="loading" style="display: none;">正在获取文章列表</div>
+  </div>
+  
+  <!-- 进度条 -->
+  <div id="progressSection" style="display: none;">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-text" id="progressText"></div>
+  </div>
+  
   <div id="status"></div>
+  
   <script src="popup.js"></script>
 </body>
 </html>
