@@ -330,7 +330,8 @@
       class="url-input" 
       placeholder="粘贴多个文章链接，每行一个"
     ></textarea>
-    <p class="hint">💡 每行输入一个文章链接</p>
+    <p class="hint">💡 每行输入一个文章链接，或点击下方按钮从剪贴板粘贴</p>
+    <button id="pasteFromClipboardBtn" style="margin-bottom: 10px; width: 100%;">📋 从剪贴板粘贴</button>
     <button id="batchConvertBtn">开始批量转换</button>
   </div>
   
@@ -339,15 +340,21 @@
     <div class="instruction-box">
       <strong>📖 使用说明：</strong>
       <ol class="step-list">
-        <li>在任意公众号文章页面点击"打开历史页"</li>
-        <li>等待历史页面加载完成</li>
-        <li>点击"获取文章列表"按钮</li>
+        <li><strong>方案1（推荐）</strong>：在文章页面点击"从当前页面提取链接"</li>
+        <li><strong>方案2</strong>：手动输入历史文章页面链接，然后点击"获取文章列表"</li>
+        <li><strong>方案3</strong>：在微信中打开历史文章页面，然后在浏览器中打开，点击"获取文章列表"</li>
         <li>勾选需要的文章，批量下载</li>
       </ol>
     </div>
     
+    <button id="extractFromCurrentPageBtn" class="btn-primary">🔍 从当前页面提取链接</button>
     <button id="openHistoryBtn" class="btn-warning">📱 打开历史文章页面</button>
     <button id="fetchAccountBtn" class="btn-secondary">📋 获取文章列表</button>
+    
+    <div style="margin-top: 10px;">
+      <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #666;">或手动输入历史文章页面链接：</label>
+      <input type="text" id="historyPageUrl" class="url-input" placeholder="粘贴历史文章页面链接（可选）" style="width: 100%; padding: 8px; margin-bottom: 5px;">
+    </div>
     
     <div id="accountInfo" style="display: none;"></div>
     <div id="articleList" style="display: none;">
