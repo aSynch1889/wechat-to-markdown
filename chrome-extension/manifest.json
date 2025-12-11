@@ -1,39 +1,41 @@
 {
-    "manifest_version": 3,
-    "name": "微信公众号转Markdown",
-    "version": "2.0",
-    "description": "一键将微信公众号文章转换为Markdown格式，支持批量下载和公众号历史文章获取",
-    "permissions": [
-      "activeTab",
-      "scripting",
-      "downloads",
-      "storage",
-      "tabs"
-    ],
-    "host_permissions": [
-      "https://mp.weixin.qq.com/*"
-    ],
-    "action": {
-      "default_popup": "popup.html",
-      "default_icon": {
-        "16": "icon16.png",
-        "48": "icon48.png",
-        "128": "icon128.png"
-      }
-    },
-    "background": {
-      "service_worker": "background.js"
-    },
-    "content_scripts": [
-      {
-        "matches": ["https://mp.weixin.qq.com/mp/profile_ext*"],
-        "js": ["content.js"],
-        "run_at": "document_idle"
-      }
-    ],
-    "icons": {
+  "manifest_version": 3,
+  "name": "微信公众号转Markdown - 完整版",
+  "version": "3.0",
+  "description": "通过公众号后台API获取任意公众号的完整文章列表，支持批量下载转换为Markdown",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "storage",
+    "tabs",
+    "cookies"
+  ],
+  "host_permissions": [
+    "https://mp.weixin.qq.com/*",
+    "https://*.qq.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
       "16": "icon16.png",
       "48": "icon48.png",
       "128": "icon128.png"
     }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mp.weixin.qq.com/*"],
+      "js": ["content-mp.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
   }
+}

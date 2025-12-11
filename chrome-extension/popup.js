@@ -1,3 +1,6 @@
+// ==================== popup.js - 完整代码 ====================
+
+// Tab切换
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     const tabName = tab.dataset.tab;
@@ -8,62 +11,16 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
-// 单篇转换
+// 页面加载时检查登录状态
+window.addEventListener('load', () => {
+  checkLoginStatus();
+});
+
+// ==================== 单篇转换 ====================
 document.getElementById('convertBtn').addEventListener('click', async () => {
   await convertCurrentPage();
 });
 
-// 批量转换
-document.getElementById('batchConvertBtn').addEventListener('click', async () => {
-  await batchConvert();
-});
-
-// 打开历史文章页
-document.getElementById('openHistoryBtn').addEventListener('click', async () => {
-  await openHistoryPage();
-});
-
-// 获取公众号文章
-document.getElementById('fetchAccountBtn').addEventListener('click', async () => {
-  await fetchAccountArticles();
-});
-
-// 从当前页面提取链接
-document.getElementById('extractFromCurrentPageBtn').addEventListener('click', async () => {
-  await extractLinksFromCurrentPage();
-});
-
-// 从剪贴板粘贴
-document.getElementById('pasteFromClipboardBtn').addEventListener('click', async () => {
-  try {
-    const text = await navigator.clipboard.readText();
-    const textarea = document.getElementById('batchUrls');
-    textarea.value = text;
-    showStatus('✓ 已从剪贴板粘贴', 'success');
-  } catch (error) {
-    showStatus('✗ 无法读取剪贴板，请手动粘贴', 'error');
-  }
-});
-
-// 选择控制
-document.getElementById('selectAllBtn')?.addEventListener('click', () => {
-  document.querySelectorAll('.article-checkbox').forEach(cb => cb.checked = true);
-});
-
-document.getElementById('selectNoneBtn')?.addEventListener('click', () => {
-  document.querySelectorAll('.article-checkbox').forEach(cb => cb.checked = false);
-});
-
-document.getElementById('selectInvertBtn')?.addEventListener('click', () => {
-  document.querySelectorAll('.article-checkbox').forEach(cb => cb.checked = !cb.checked);
-});
-
-// 下载选中文章
-document.getElementById('downloadSelectedBtn')?.addEventListener('click', async () => {
-  await downloadSelected();
-});
-
-// 转换当前页面
 async function convertCurrentPage() {
   const button = document.getElementById('convertBtn');
   button.disabled = true;
@@ -99,7 +56,11 @@ async function convertCurrentPage() {
   }
 }
 
-// 批量转换
+// ==================== 批量转换 ====================
+document.getElementById('batchConvertBtn').addEventListener('click', async () => {
+  await batchConvert();
+});
+
 async function batchConvert() {
   const textarea = document.getElementById('batchUrls');
   const urls = textarea.value.split('\n')
@@ -140,398 +101,353 @@ async function batchConvert() {
   button.textContent = '开始批量转换';
 }
 
-// 打开历史文章页面
-async function openHistoryPage() {
-  const button = document.getElementById('openHistoryBtn');
-  button.disabled = true;
-  
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
-    if (!tab.url.includes('mp.weixin.qq.com')) {
-      throw new Error('请在微信公众号文章页面使用此功能');
-    }
-    
-    let biz = null;
-    
-    // 方法1: 从URL查询参数中提取 __biz
-    const bizMatch = tab.url.match(/[?&]__biz=([^&]+)/);
-    if (bizMatch) {
-      biz = decodeURIComponent(bizMatch[1]);
-    }
-    
-    // 方法2: 如果方法1失败，尝试从页面中提取
-    if (!biz) {
+async function convertUrlToMarkdown(url) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.create({ url, active: false }, async (tab) => {
       try {
+        await sleep(3000);
+        
         const results = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
-          function: extractBizFromPage
+          function: extractArticle
         });
         
-        if (results && results[0] && results[0].result) {
-          biz = results[0].result;
-        }
-      } catch (e) {
-        console.log('从页面提取失败:', e);
-      }
-    }
-    
-    // 方法3: 尝试从URL的hash中提取
-    if (!biz) {
-      const hashMatch = tab.url.match(/[#&]__biz=([^&]+)/);
-      if (hashMatch) {
-        biz = decodeURIComponent(hashMatch[1]);
-      }
-    }
-    
-    // 方法4: 尝试从页面链接中提取
-    if (!biz) {
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          function: extractBizFromLinks
-        });
+        const article = results[0].result;
+        if (!article || !article.title) throw new Error('提取失败');
         
-        if (results && results[0] && results[0].result) {
-          biz = results[0].result;
-        }
-      } catch (e) {
-        console.log('从链接提取失败:', e);
+        const markdown = convertToMarkdown(article);
+        await downloadMarkdown(markdown, article.title);
+        
+        chrome.tabs.remove(tab.id);
+        resolve();
+      } catch (error) {
+        chrome.tabs.remove(tab.id);
+        reject(error);
       }
-    }
-    
-    if (!biz) {
-      throw new Error('无法提取公众号信息，请确保在微信公众号文章页面使用此功能');
-    }
-    
-    // 构建历史文章页面URL - 尝试多种格式
-    // 格式1: 不带 wechat_redirect
-    const historyUrl1 = `https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=${encodeURIComponent(biz)}&scene=124`;
-    // 格式2: 使用 getmsg 参数
-    const historyUrl2 = `https://mp.weixin.qq.com/mp/profile_ext?action=getmsg&__biz=${encodeURIComponent(biz)}&f=json&offset=0&count=10`;
-    // 格式3: 标准格式（可能需要在微信客户端打开）
-    const historyUrl3 = `https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=${encodeURIComponent(biz)}&scene=124#wechat_redirect`;
-    
-    // 先尝试格式1（最可能在浏览器中打开）
-    chrome.tabs.create({ url: historyUrl1, active: true });
-    
-    // 保存 biz 到 storage，以便后续使用
-    chrome.storage.local.set({ lastBiz: biz });
-    
-    showStatus('✓ 已打开历史文章页面。提示：如果页面显示"请在微信客户端打开"，您可以：1) 复制链接在微信中打开，或 2) 等待几秒后直接点击"获取文章列表"尝试提取', 'info');
-  } catch (error) {
-    showStatus('✗ ' + error.message, 'error');
-  } finally {
-    button.disabled = false;
-  }
-}
-
-// 从页面中提取 __biz 参数（注入到页面中执行）
-function extractBizFromPage() {
-  // 尝试从meta标签中获取
-  const metaBiz = document.querySelector('meta[property="og:url"]')?.content;
-  if (metaBiz) {
-    const match = metaBiz.match(/__biz=([^&]+)/);
-    if (match) return decodeURIComponent(match[1]);
-  }
-  
-  // 尝试从当前URL中获取
-  const urlMatch = window.location.href.match(/__biz=([^&]+)/);
-  if (urlMatch) return decodeURIComponent(urlMatch[1]);
-  
-  // 尝试从页面中的链接获取
-  const links = document.querySelectorAll('a[href*="__biz"]');
-  for (const link of links) {
-    const match = link.href.match(/__biz=([^&]+)/);
-    if (match) return decodeURIComponent(match[1]);
-  }
-  
-  return null;
-}
-
-// 从页面链接中提取 __biz 参数
-function extractBizFromLinks() {
-  // 查找所有包含 profile_ext 或 __biz 的链接
-  const selectors = [
-    'a[href*="profile_ext"]',
-    'a[href*="__biz"]',
-    '.profile_nickname',
-    '.account_nickname'
-  ];
-  
-  for (const selector of selectors) {
-    const elements = document.querySelectorAll(selector);
-    for (const el of elements) {
-      let url = el.href || el.closest('a')?.href;
-      if (!url && el.closest('a')) {
-        url = el.closest('a').href;
-      }
-      
-      if (url) {
-        const match = url.match(/__biz=([^&]+)/);
-        if (match) return decodeURIComponent(match[1]);
-      }
-    }
-  }
-  
-  return null;
-}
-
-// 从当前页面提取所有文章链接
-async function extractLinksFromCurrentPage() {
-  const button = document.getElementById('extractFromCurrentPageBtn');
-  button.disabled = true;
-  showStatus('正在从当前页面提取链接...', 'info');
-  
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
-    if (!tab.url.includes('mp.weixin.qq.com')) {
-      throw new Error('请在微信公众号文章页面使用此功能');
-    }
-    
-    // 注入脚本提取所有文章链接
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      function: extractAllArticleLinks
     });
+  });
+}
+
+// ==================== 公众号后台API ====================
+
+// 检查登录状态
+async function checkLoginStatus() {
+  try {
+    const { mpCredentials } = await chrome.storage.local.get('mpCredentials');
     
-    const data = results[0].result;
-    
-    if (!data || !data.articles || data.articles.length === 0) {
-      throw new Error('未找到文章链接，请确保在微信公众号文章页面使用');
+    if (mpCredentials && mpCredentials.token) {
+      const isValid = await verifyToken(mpCredentials.token);
+      
+      if (isValid) {
+        updateLoginUI(true, mpCredentials);
+        return true;
+      } else {
+        await chrome.storage.local.remove('mpCredentials');
+        updateLoginUI(false);
+        return false;
+      }
+    } else {
+      updateLoginUI(false);
+      return false;
     }
-    
-    // 显示文章列表
-    const accountInfo = document.getElementById('accountInfo');
-    const articleList = document.getElementById('articleList');
-    
-    accountInfo.innerHTML = `
-      <div class="account-name">${data.accountName || '公众号'}</div>
-      <div class="account-meta">找到 ${data.articles.length} 个文章链接</div>
-    `;
-    accountInfo.style.display = 'block';
-    
-    displayArticleList(data.articles);
-    articleList.style.display = 'block';
-    
-    showStatus(`✓ 成功提取 ${data.articles.length} 个文章链接`, 'success');
   } catch (error) {
-    showStatus('✗ ' + error.message, 'error');
-  } finally {
-    button.disabled = false;
+    console.error('检查登录状态失败:', error);
+    updateLoginUI(false);
+    return false;
   }
 }
 
-// 从页面提取所有文章链接（注入到页面中执行）
-function extractAllArticleLinks() {
-  const articles = [];
+// 验证Token有效性
+async function verifyToken(token) {
+  try {
+    if (!token || token.length < 5) {
+      return false;
+    }
+    // 微信的token通常是纯数字
+    return /^\d+$/.test(token);
+  } catch (error) {
+    return false;
+  }
+}
+
+// 更新登录UI
+function updateLoginUI(isLoggedIn, credentials = null) {
+  const statusBox = document.getElementById('loginStatusBox');
+  const statusText = document.getElementById('loginStatusText');
+  const statusDetail = document.getElementById('loginStatusDetail');
+  const loginBtn = document.getElementById('loginMPBtn');
+  const logoutBtn = document.getElementById('logoutMPBtn');
+  const searchSection = document.getElementById('searchSection');
   
-  // 提取公众号名称
-  const accountName = document.querySelector('.profile_nickname')?.textContent.trim() || 
-                      document.querySelector('#js_name')?.textContent.trim() ||
-                      document.querySelector('.account_nickname_inner')?.textContent.trim() ||
-                      '公众号';
+  if (isLoggedIn && credentials) {
+    statusBox.className = 'login-status logged-in';
+    statusBox.querySelector('.status-icon').textContent = '🟢';
+    statusText.textContent = '已登录';
+    
+    const loginTime = new Date(credentials.timestamp).toLocaleString('zh-CN');
+    const tokenPreview = credentials.token.substring(0, 15) + '...';
+    statusDetail.textContent = `Token: ${tokenPreview} | ${loginTime}`;
+    
+    loginBtn.style.display = 'none';
+    logoutBtn.style.display = 'block';
+    searchSection.style.display = 'block';
+    
+    console.log('UI更新为已登录状态');
+  } else {
+    statusBox.className = 'login-status logged-out';
+    statusBox.querySelector('.status-icon').textContent = '🔴';
+    statusText.textContent = '未登录';
+    statusDetail.textContent = '需要登录公众号后台';
+    loginBtn.style.display = 'block';
+    logoutBtn.style.display = 'none';
+    searchSection.style.display = 'none';
+    
+    console.log('UI更新为未登录状态');
+  }
+}
+
+// 登录公众号后台
+document.getElementById('loginMPBtn').addEventListener('click', async () => {
+  const loginUrl = 'https://mp.weixin.qq.com/';
   
-  // 方法1: 查找所有包含文章链接的a标签
-  const allLinks = document.querySelectorAll('a[href*="/s?"], a[href*="/s/"]');
+  showStatus('正在打开公众号后台，请使用微信扫码登录...', 'info');
   
-  allLinks.forEach(link => {
+  const newTab = await chrome.tabs.create({ url: loginUrl, active: true });
+  
+  const checkInterval = setInterval(async () => {
     try {
-      let url = link.href;
+      const tab = await chrome.tabs.get(newTab.id);
       
-      // 处理相对路径
-      if (url && url.startsWith('/')) {
-        url = 'https://mp.weixin.qq.com' + url;
-      }
+      console.log('检查URL:', tab.url);
       
-      // 确保URL包含完整的域名
-      if (url && !url.startsWith('http')) {
-        url = 'https://mp.weixin.qq.com' + (url.startsWith('/') ? '' : '/') + url;
-      }
-      
-      // 只添加有效的文章链接
-      if (url && (url.includes('/s?') || url.includes('/s/')) && url.includes('mp.weixin.qq.com')) {
-        // 尝试提取标题
-        const title = link.textContent.trim() || 
-                     link.querySelector('h4, .title, .weui-media-box__title, .rich_media_title')?.textContent.trim() ||
-                     link.getAttribute('title') ||
-                     '未命名文章';
+      if (tab.url && tab.url.includes('token=')) {
+        console.log('✅ 检测到token参数！');
+        clearInterval(checkInterval);
         
-        // 避免重复添加
-        if (title && !articles.some(a => a.url === url)) {
-          articles.push({
-            title: title.substring(0, 100), // 限制标题长度
-            url: url,
-            date: ''
+        const urlParams = new URL(tab.url);
+        const token = urlParams.searchParams.get('token');
+        
+        if (token) {
+          console.log('提取到Token:', token);
+          
+          const cookies = await chrome.cookies.getAll({
+            url: 'https://mp.weixin.qq.com'
           });
+          
+          const credentials = {
+            token: token,
+            timestamp: Date.now(),
+            cookies: cookies.map(c => ({ 
+              name: c.name, 
+              value: c.value,
+              domain: c.domain
+            })),
+            extractMethod: 'url',
+            url: tab.url
+          };
+          
+          await chrome.storage.local.set({ mpCredentials: credentials });
+          
+          showStatus('✓ 登录成功！Token: ' + token.substring(0, 15) + '...', 'success');
+          updateLoginUI(true, credentials);
+          
+          setTimeout(() => {
+            chrome.tabs.remove(newTab.id).catch(() => {});
+          }, 1000);
+        } else {
+          console.error('URL中有token参数但提取失败');
         }
       }
-    } catch (e) {
-      console.error('提取链接失败:', e);
+    } catch (error) {
+      console.log('标签页已关闭或出错:', error);
+      clearInterval(checkInterval);
     }
-  });
+  }, 2000);
   
-  // 方法2: 查找相关文章区域
-  const relatedSelectors = [
-    '.related-article',
-    '.recommend-article',
-    '.more-article',
-    '[class*="related"]',
-    '[class*="recommend"]'
-  ];
-  
-  relatedSelectors.forEach(selector => {
-    const containers = document.querySelectorAll(selector);
-    containers.forEach(container => {
-      const links = container.querySelectorAll('a[href*="/s"]');
-      links.forEach(link => {
-        try {
-          let url = link.href;
-          if (url && url.startsWith('/')) {
-            url = 'https://mp.weixin.qq.com' + url;
-          }
-          if (url && !url.startsWith('http')) {
-            url = 'https://mp.weixin.qq.com' + (url.startsWith('/') ? '' : '/') + url;
-          }
-          if (url && (url.includes('/s?') || url.includes('/s/')) && url.includes('mp.weixin.qq.com')) {
-            const title = link.textContent.trim() || link.getAttribute('title') || '未命名文章';
-            if (title && !articles.some(a => a.url === url)) {
-              articles.push({
-                title: title.substring(0, 100),
-                url: url,
-                date: ''
-              });
-            }
-          }
-        } catch (e) {
-          console.error('提取相关文章失败:', e);
-        }
-      });
-    });
-  });
-  
-  return {
-    accountName,
-    articles: articles.slice(0, 100) // 限制最多100个
-  };
-}
+  setTimeout(() => {
+    clearInterval(checkInterval);
+  }, 60000);
+});
 
-// 获取公众号文章列表
-async function fetchAccountArticles() {
-  const button = document.getElementById('fetchAccountBtn');
-  const loading = document.getElementById('loadingArticles');
-  const articleList = document.getElementById('articleList');
-  const accountInfo = document.getElementById('accountInfo');
-  const historyPageUrlInput = document.getElementById('historyPageUrl');
+// 从当前页面提取Token
+document.getElementById('extractFromCurrentBtn').addEventListener('click', async () => {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    if (!tab.url.includes('mp.weixin.qq.com')) {
+      throw new Error('请在微信公众号后台页面使用此功能');
+    }
+    
+    if (tab.url.includes('token=')) {
+      const urlParams = new URL(tab.url);
+      const token = urlParams.searchParams.get('token');
+      
+      if (token) {
+        const cookies = await chrome.cookies.getAll({
+          url: 'https://mp.weixin.qq.com'
+        });
+        
+        const credentials = {
+          token: token,
+          timestamp: Date.now(),
+          cookies: cookies.map(c => ({ 
+            name: c.name, 
+            value: c.value 
+          })),
+          extractMethod: 'current_page'
+        };
+        
+        await chrome.storage.local.set({ mpCredentials: credentials });
+        showStatus('✓ 从当前页面提取Token成功: ' + token, 'success');
+        updateLoginUI(true, credentials);
+      } else {
+        throw new Error('URL中没有token参数');
+      }
+    } else {
+      throw new Error('当前页面URL中没有token参数，请确保已登录后台');
+    }
+  } catch (error) {
+    showStatus('✗ ' + error.message, 'error');
+  }
+});
+
+// 退出登录
+document.getElementById('logoutMPBtn').addEventListener('click', async () => {
+  if (confirm('确定要退出登录吗？')) {
+    await chrome.storage.local.remove('mpCredentials');
+    updateLoginUI(false);
+    showStatus('✓ 已退出登录', 'success');
+  }
+});
+
+// 调试按钮
+document.getElementById('debugLoginBtn').addEventListener('click', async () => {
+  console.log('=== 开始调试登录状态 ===');
+  
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  console.log('当前标签页URL:', tab.url);
+  
+  if (tab.url && tab.url.includes('token=')) {
+    try {
+      const urlParams = new URL(tab.url);
+      const token = urlParams.searchParams.get('token');
+      console.log('URL中的Token:', token);
+    } catch (error) {
+      console.log('URL解析失败:', error);
+    }
+  } else {
+    console.log('URL中没有token参数');
+  }
+  
+  const cookies = await chrome.cookies.getAll({
+    url: 'https://mp.weixin.qq.com'
+  });
+  console.log('微信Cookie数量:', cookies.length);
+  console.log('Cookie列表:');
+  cookies.forEach(c => {
+    console.log(`  ${c.name}: ${c.value.substring(0, 30)}...`);
+  });
+  
+  const { mpCredentials } = await chrome.storage.local.get('mpCredentials');
+  if (mpCredentials) {
+    console.log('存储的凭证:');
+    console.log('  Token:', mpCredentials.token);
+    console.log('  时间:', new Date(mpCredentials.timestamp).toLocaleString());
+    console.log('  提取方式:', mpCredentials.extractMethod);
+  } else {
+    console.log('❌ 未找到存储的凭证');
+  }
+  
+  console.log('=== 调试完成 ===');
+  alert('调试信息已输出到控制台（按F12查看）');
+});
+
+// 手动输入Token
+document.getElementById('manualTokenBtn').addEventListener('click', async () => {
+  const token = prompt('请输入Token（纯数字，如：450735061）:');
+  
+  if (token && /^\d+$/.test(token)) {
+    const credentials = {
+      token: token,
+      timestamp: Date.now(),
+      cookies: [],
+      extractMethod: 'manual'
+    };
+    
+    await chrome.storage.local.set({ mpCredentials: credentials });
+    showStatus('✓ Token已保存: ' + token, 'success');
+    updateLoginUI(true, credentials);
+  } else {
+    showStatus('Token格式不正确（应该是纯数字）', 'error');
+  }
+});
+
+// 搜索公众号文章
+document.getElementById('searchMPAccountBtn').addEventListener('click', async () => {
+  await searchMPAccount();
+});
+
+async function searchMPAccount() {
+  const accountName = document.getElementById('mpAccountName').value.trim();
+  
+  if (!accountName) {
+    showStatus('请输入公众号名称', 'warning');
+    return;
+  }
+  
+  const button = document.getElementById('searchMPAccountBtn');
+  const loading = document.getElementById('loadingMP');
   
   button.disabled = true;
+  button.textContent = '搜索中...';
   loading.style.display = 'block';
-  articleList.style.display = 'none';
-  accountInfo.style.display = 'none';
   
   try {
-    let tab;
+    const { mpCredentials } = await chrome.storage.local.get('mpCredentials');
     
-    // 如果用户输入了历史文章页面链接，使用该链接
-    if (historyPageUrlInput && historyPageUrlInput.value.trim()) {
-      const url = historyPageUrlInput.value.trim();
-      if (!url.includes('mp.weixin.qq.com')) {
-        throw new Error('请输入有效的微信公众号链接');
-      }
-      
-      // 打开新标签页
-      const newTab = await chrome.tabs.create({ url: url, active: false });
-      await sleep(3000); // 等待页面加载
-      tab = await chrome.tabs.get(newTab.id);
+    if (!mpCredentials || !mpCredentials.token) {
+      throw new Error('未登录，请先登录公众号后台');
+    }
+    
+    const response = await chrome.runtime.sendMessage({
+      action: 'searchMPArticles',
+      accountName: accountName,
+      credentials: mpCredentials
+    });
+    
+    if (response.success && response.articles && response.articles.length > 0) {
+      displayMPArticleList(response.articles, accountName);
+      showStatus(`✓ 找到 ${response.articles.length} 篇文章`, 'success');
     } else {
-      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      showStatus(response.error || '未找到文章', 'warning');
     }
-    
-    // 检查是否是微信公众号相关页面
-    if (!tab.url.includes('mp.weixin.qq.com')) {
-      throw new Error('请在微信公众号相关页面使用此功能');
-    }
-    
-    // 如果是历史文章页面，直接提取
-    let data = null;
-    if (tab.url.includes('mp.weixin.qq.com/mp/profile_ext')) {
-      // 注入脚本提取文章列表
-      const results = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        function: extractHistoryArticles
-      });
-      
-      data = results[0].result;
-    } else {
-      // 如果不是历史页面，尝试从当前页面提取（可能是单篇文章页面）
-      // 先尝试使用 content.js 中的提取函数
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          function: extractHistoryArticles
-        });
-        data = results[0].result;
-      } catch (e) {
-        // 如果失败，提示用户
-        throw new Error('请在公众号历史文章页面使用此功能。如果页面显示"请在微信客户端打开"，请尝试：1) 在微信中打开该链接，或 2) 等待页面完全加载后再试');
-      }
-    }
-    
-    if (!data || !data.articles || data.articles.length === 0) {
-      // 检查页面是否显示"请在微信客户端打开"
-      try {
-        const pageCheck = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          function: () => {
-            const bodyText = document.body.textContent || '';
-            if (bodyText.includes('请在微信客户端打开') || bodyText.includes('wechat_redirect')) {
-              return { blocked: true };
-            }
-            return { blocked: false };
-          }
-        });
-        
-        if (pageCheck[0].result.blocked) {
-          throw new Error('页面显示"请在微信客户端打开链接"。请尝试：1) 复制链接在微信中打开历史文章页面，或 2) 使用单篇转换功能转换当前文章');
-        }
-      } catch (e) {
-        // 忽略检查错误
-      }
-      
-      throw new Error('未找到文章列表。请确保：1) 页面已完全加载，2) 在公众号历史文章页面使用，3) 如果页面显示"请在微信客户端打开"，请在微信中打开该链接');
-    }
-    
-    // 显示公众号信息
-    accountInfo.innerHTML = `
-      <div class="account-name">${data.accountName || '公众号'}</div>
-      <div class="account-meta">找到 ${data.articles.length} 篇文章</div>
-    `;
-    accountInfo.style.display = 'block';
-    
-    // 显示文章列表
-    displayArticleList(data.articles);
-    
-    showStatus(`✓ 成功获取 ${data.articles.length} 篇文章`, 'success');
   } catch (error) {
     showStatus('✗ ' + error.message, 'error');
   } finally {
     button.disabled = false;
+    button.textContent = '🔍 搜索公众号文章';
     loading.style.display = 'none';
   }
 }
 
 // 显示文章列表
-function displayArticleList(articles) {
-  const container = document.getElementById('articleListContent');
-  const articleList = document.getElementById('articleList');
+function displayMPArticleList(articles, accountName) {
+  const container = document.getElementById('mpArticleListContent');
+  const articleList = document.getElementById('mpArticleList');
+  const accountInfo = document.getElementById('accountInfo');
+  
+  accountInfo.innerHTML = `
+    <div class="account-name">${accountName}</div>
+    <div class="account-meta">共找到 ${articles.length} 篇文章</div>
+  `;
+  accountInfo.style.display = 'block';
   
   container.innerHTML = articles.map((article, index) => `
     <div class="article-item">
       <input type="checkbox" class="article-checkbox" data-index="${index}" checked>
       <div class="article-info">
         <div class="article-title">${article.title}</div>
-        <div class="article-meta">${article.date || '日期未知'}</div>
+        <div class="article-meta">${article.date || ''} ${article.author ? '· ' + article.author : ''}</div>
       </div>
     </div>
   `).join('');
@@ -540,8 +456,21 @@ function displayArticleList(articles) {
   chrome.storage.local.set({ pendingArticles: articles });
 }
 
-// 下载选中的文章
-async function downloadSelected() {
+// 选择控制
+document.getElementById('selectAllMPBtn').addEventListener('click', () => {
+  document.querySelectorAll('.article-checkbox').forEach(cb => cb.checked = true);
+});
+
+document.getElementById('selectNoneMPBtn').addEventListener('click', () => {
+  document.querySelectorAll('.article-checkbox').forEach(cb => cb.checked = false);
+});
+
+document.getElementById('selectInvertMPBtn').addEventListener('click', () => {
+  document.querySelectorAll('.article-checkbox').forEach(cb => cb.checked = !cb.checked);
+});
+
+// 下载选中文章
+document.getElementById('downloadMPSelectedBtn').addEventListener('click', async () => {
   const checkboxes = document.querySelectorAll('.article-checkbox:checked');
   
   if (checkboxes.length === 0) {
@@ -549,7 +478,7 @@ async function downloadSelected() {
     return;
   }
   
-  const button = document.getElementById('downloadSelectedBtn');
+  const button = document.getElementById('downloadMPSelectedBtn');
   button.disabled = true;
   button.textContent = '下载中...';
   
@@ -578,37 +507,10 @@ async function downloadSelected() {
   
   button.disabled = false;
   button.textContent = '下载选中文章';
-}
+});
 
-// 转换URL到Markdown
-async function convertUrlToMarkdown(url) {
-  return new Promise((resolve, reject) => {
-    chrome.tabs.create({ url, active: false }, async (tab) => {
-      try {
-        await sleep(3000);
-        
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          function: extractArticle
-        });
-        
-        const article = results[0].result;
-        if (!article || !article.title) throw new Error('提取失败');
-        
-        const markdown = convertToMarkdown(article);
-        await downloadMarkdown(markdown, article.title);
-        
-        chrome.tabs.remove(tab.id);
-        resolve();
-      } catch (error) {
-        chrome.tabs.remove(tab.id);
-        reject(error);
-      }
-    });
-  });
-}
+// ==================== 工具函数 ====================
 
-// 提取当前文章内容
 function extractArticle() {
   const article = {
     title: '',
@@ -633,186 +535,79 @@ function extractArticle() {
   return article;
 }
 
-// 提取历史文章列表
-function extractHistoryArticles() {
-  const articles = [];
-  const accountName = document.querySelector('.profile_nickname')?.textContent.trim() || '';
-  
-  // 尝试多种选择器来适配不同的页面结构
-  const selectors = [
-    '.album__list-item',
-    '.weui-media-box',
-    '[data-type="article"]',
-    '.appmsg_item'
-  ];
-  
-  let articleItems = [];
-  for (const selector of selectors) {
-    articleItems = document.querySelectorAll(selector);
-    if (articleItems.length > 0) break;
-  }
-  
-  articleItems.forEach(item => {
-    const titleEl = item.querySelector('.album__list-item-title, .weui-media-box__title, .appmsg_title');
-    const linkEl = item.querySelector('a');
-    const dateEl = item.querySelector('.album__list-item-time, .weui-media-box__info__meta, .appmsg_info');
-    
-    if (titleEl && linkEl) {
-      let url = linkEl.href;
-      // 确保URL是完整的
-      if (url.startsWith('/')) {
-        url = 'https://mp.weixin.qq.com' + url;
-      }
-      
-      // 只添加文章链接
-      if (url && (url.includes('/s?') || url.includes('/s/'))) {
-        articles.push({
-          title: titleEl.textContent.trim(),
-          url: url,
-          date: dateEl ? dateEl.textContent.trim() : ''
-        });
-      }
-    }
-  });
-  
-  return {
-    accountName,
-    articles
-  };
-}
-
-// 工具函数
-function showStatus(message, type = 'info') {
-  const status = document.getElementById('status');
-  if (!status) return;
-  
-  status.textContent = message;
-  status.className = type;
-  status.style.display = 'block';
-  
-  if (type === 'success') {
-    setTimeout(() => {
-      status.style.display = 'none';
-    }, 3000);
-  }
-}
-
-function showProgress(current, total) {
-  const progressSection = document.getElementById('progressSection');
-  if (progressSection) {
-    progressSection.style.display = 'block';
-  }
-  updateProgress(current, total);
-}
-
-function updateProgress(current, total) {
-  const progressFill = document.getElementById('progressFill');
-  const progressText = document.getElementById('progressText');
-  
-  if (progressFill && progressText) {
-    const percent = Math.round((current / total) * 100);
-    progressFill.style.width = percent + '%';
-    progressText.textContent = `${current} / ${total} (${percent}%)`;
-  }
-}
-
-function hideProgress() {
-  const progressSection = document.getElementById('progressSection');
-  if (progressSection) {
-    progressSection.style.display = 'none';
-  }
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// HTML转Markdown
 function convertToMarkdown(article) {
   let markdown = `# ${article.title}\n\n`;
   
-  if (article.author) {
-    markdown += `**作者**: ${article.author}\n\n`;
-  }
-  
-  if (article.publishTime) {
-    markdown += `**发布时间**: ${article.publishTime}\n\n`;
-  }
-  
+  if (article.author) markdown += `**作者**: ${article.author}\n\n`;
+  if (article.publishTime) markdown += `**发布时间**: ${article.publishTime}\n\n`;
   markdown += `**原文链接**: ${article.url}\n\n---\n\n`;
   
   let content = article.content || '';
   
-  // 移除script和style标签
   content = content.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   content = content.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-  
-  // 标题
   content = content.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n');
   content = content.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n');
   content = content.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n');
-  content = content.replace(/<h4[^>]*>(.*?)<\/h4>/gi, '#### $1\n\n');
-  
-  // 粗体斜体
   content = content.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**');
   content = content.replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**');
   content = content.replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*');
-  
-  // 链接
   content = content.replace(/<a[^>]*href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi, '[$2]($1)');
-  
-  // 图片 - 优先data-src
   content = content.replace(/<img[^>]*data-src=["']([^"']*)["'][^>]*>/gi, '![]($1)\n');
   content = content.replace(/<img[^>]*src=["']([^"']*)["'][^>]*>/gi, '![]($1)\n');
-  
-  // 段落
   content = content.replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n');
   content = content.replace(/<br\s*\/?>/gi, '\n');
-  
-  // 列表
-  content = content.replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n');
-  
-  // 引用
-  content = content.replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gi, '> $1\n\n');
-  
-  // 代码
-  content = content.replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`');
-  
-  // 移除所有HTML标签
   content = content.replace(/<[^>]+>/g, '');
-  
-  // HTML实体解码
   content = content.replace(/&nbsp;/g, ' ');
   content = content.replace(/&lt;/g, '<');
   content = content.replace(/&gt;/g, '>');
   content = content.replace(/&amp;/g, '&');
-  content = content.replace(/&quot;/g, '"');
-  
-  // 清理多余空行
   content = content.replace(/\n{3,}/g, '\n\n');
   
   markdown += content.trim();
   return markdown;
 }
 
-// 下载Markdown文件
 async function downloadMarkdown(content, filename) {
   filename = filename.replace(/[\\/*?:"<>|]/g, '').substring(0, 100);
   const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     chrome.downloads.download({
       url: url,
       filename: `${filename}.md`,
       saveAs: false
     }, (downloadId) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else {
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        resolve(downloadId);
-      }
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      resolve(downloadId);
     });
   });
+}
+
+function showStatus(message, type = 'info') {
+  const status = document.getElementById('status');
+  status.textContent = message;
+  status.className = type;
+  status.style.display = 'block';
+  if (type === 'success') setTimeout(() => status.style.display = 'none', 3000);
+}
+
+function showProgress(current, total) {
+  document.getElementById('progressSection').style.display = 'block';
+  updateProgress(current, total);
+}
+
+function updateProgress(current, total) {
+  const percent = Math.round((current / total) * 100);
+  document.getElementById('progressFill').style.width = percent + '%';
+  document.getElementById('progressText').textContent = `${current} / ${total} (${percent}%)`;
+}
+
+function hideProgress() {
+  document.getElementById('progressSection').style.display = 'none';
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }

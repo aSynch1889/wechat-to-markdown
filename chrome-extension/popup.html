@@ -10,8 +10,8 @@
     }
     
     body {
-      width: 450px;
-      max-height: 600px;
+      width: 500px;
+      max-height: 650px;
       padding: 20px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
       overflow-y: auto;
@@ -97,40 +97,20 @@
       background: #d97706;
     }
     
-    #status {
-      margin-top: 15px;
-      padding: 10px;
-      border-radius: 6px;
-      font-size: 13px;
-      display: none;
+    .btn-success {
+      background: #10b981;
     }
     
-    .success {
-      background: #e8f5e9;
-      color: #2e7d32;
-      border: 1px solid #81c784;
+    .btn-success:hover:not(:disabled) {
+      background: #059669;
     }
     
-    .error {
-      background: #ffebee;
-      color: #c62828;
-      border: 1px solid #ef5350;
+    .btn-danger {
+      background: #ef4444;
     }
     
-    .info {
-      background: #e3f2fd;
-      color: #1565c0;
-      border: 1px solid #64b5f6;
-    }
-    
-    .warning {
-      background: #fff3e0;
-      color: #e65100;
-      border: 1px solid #ffb74d;
-    }
-    
-    .batch-section {
-      margin-top: 15px;
+    .btn-danger:hover:not(:disabled) {
+      background: #dc2626;
     }
     
     .url-input {
@@ -149,15 +129,83 @@
     }
     
     textarea.url-input {
-      min-height: 100px;
       resize: vertical;
     }
     
-    .hint {
-      font-size: 12px;
+    .instruction-box {
+      background: #fef3c7;
+      border: 1px solid #fbbf24;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 15px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    
+    .instruction-box strong {
+      color: #92400e;
+      display: block;
+      margin-bottom: 8px;
+    }
+    
+    .step-list {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+    
+    .step-list li {
+      margin: 4px 0;
+      color: #78350f;
+    }
+    
+    .login-status {
+      padding: 12px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .login-status.logged-in {
+      background: #d1fae5;
+      border: 1px solid #10b981;
+    }
+    
+    .login-status.logged-out {
+      background: #fee2e2;
+      border: 1px solid #ef4444;
+    }
+    
+    .status-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .status-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    
+    .status-text {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .status-text h4 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    
+    .status-text p {
+      font-size: 11px;
       color: #6b7280;
-      margin-top: 5px;
-      margin-bottom: 10px;
+      word-wrap: break-word;
     }
     
     .article-list {
@@ -243,25 +291,6 @@
       60%, 100% { content: '...'; }
     }
     
-    .account-info {
-      padding: 12px;
-      background: #f3f4f6;
-      border-radius: 6px;
-      margin-bottom: 10px;
-    }
-    
-    .account-name {
-      font-size: 14px;
-      font-weight: 600;
-      color: #333;
-      margin-bottom: 4px;
-    }
-    
-    .account-meta {
-      font-size: 12px;
-      color: #6b7280;
-    }
-    
     .progress-bar {
       width: 100%;
       height: 6px;
@@ -284,38 +313,118 @@
       margin-top: 5px;
     }
     
-    .instruction-box {
-      background: #fef3c7;
-      border: 1px solid #fbbf24;
+    #status {
+      margin-top: 15px;
+      padding: 10px;
       border-radius: 6px;
-      padding: 12px;
-      margin-bottom: 10px;
       font-size: 13px;
-      line-height: 1.6;
+      display: none;
     }
     
-    .instruction-box strong {
-      color: #92400e;
+    .success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #81c784;
     }
     
-    .step-list {
-      margin: 8px 0;
+    .error {
+      background: #ffebee;
+      color: #c62828;
+      border: 1px solid #ef5350;
+    }
+    
+    .info {
+      background: #e3f2fd;
+      color: #1565c0;
+      border: 1px solid #64b5f6;
+    }
+    
+    .warning {
+      background: #fff3e0;
+      color: #e65100;
+      border: 1px solid #ffb74d;
+    }
+    
+    .hint {
+      font-size: 12px;
+      color: #6b7280;
+      margin: 5px 0;
+    }
+    
+    .search-section {
+      margin-top: 15px;
+    }
+    
+    .account-info {
+      padding: 12px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    
+    .account-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+    
+    .account-meta {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    
+    details {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    
+    summary {
+      cursor: pointer;
+      padding: 8px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      user-select: none;
+    }
+    
+    summary:hover {
+      background: #e5e7eb;
+    }
+    
+    details[open] summary {
+      margin-bottom: 8px;
+    }
+    
+    details div {
+      padding: 10px;
+      background: #f9fafb;
+      border-radius: 6px;
+      line-height: 1.8;
+    }
+    
+    details ol {
       padding-left: 20px;
+      margin: 8px 0;
     }
     
-    .step-list li {
-      margin: 4px 0;
-      color: #78350f;
+    details a {
+      color: #1a73e8;
+      text-decoration: none;
+    }
+    
+    details a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
-  <h2>📄 微信转Markdown</h2>
+  <h2>📄 微信转Markdown Pro</h2>
   
   <div class="tabs">
     <button class="tab active" data-tab="single">单篇</button>
     <button class="tab" data-tab="batch">批量</button>
-    <button class="tab" data-tab="account">公众号</button>
+    <button class="tab" data-tab="mp-account">公众号API</button>
   </div>
   
   <!-- 单篇转换 -->
@@ -329,44 +438,105 @@
       id="batchUrls" 
       class="url-input" 
       placeholder="粘贴多个文章链接，每行一个"
+      rows="6"
     ></textarea>
-    <p class="hint">💡 每行输入一个文章链接，或点击下方按钮从剪贴板粘贴</p>
-    <button id="pasteFromClipboardBtn" style="margin-bottom: 10px; width: 100%;">📋 从剪贴板粘贴</button>
+    <p class="hint">💡 每行输入一个文章链接</p>
     <button id="batchConvertBtn">开始批量转换</button>
   </div>
   
-  <!-- 公众号历史文章 -->
-  <div class="tab-content" id="account">
+  <!-- 公众号后台API -->
+  <div class="tab-content" id="mp-account">
     <div class="instruction-box">
-      <strong>📖 使用说明：</strong>
+      <strong>🔑 使用公众号后台API获取完整文章列表</strong>
       <ol class="step-list">
-        <li><strong>方案1（推荐）</strong>：在文章页面点击"从当前页面提取链接"</li>
-        <li><strong>方案2</strong>：手动输入历史文章页面链接，然后点击"获取文章列表"</li>
-        <li><strong>方案3</strong>：在微信中打开历史文章页面，然后在浏览器中打开，点击"获取文章列表"</li>
-        <li>勾选需要的文章，批量下载</li>
+        <li>需要一个微信公众号（订阅号免费）</li>
+        <li>登录公众号后台获取权限</li>
+        <li>可搜索任意公众号的所有文章</li>
+        <li>支持获取阅读量等详细数据</li>
       </ol>
+      <p style="margin-top: 8px; font-size: 12px;">
+        💡 没有公众号？<a href="https://mp.weixin.qq.com/" target="_blank" style="color: #1a73e8;">点击注册</a>（5分钟免费注册）
+      </p>
     </div>
     
-    <button id="extractFromCurrentPageBtn" class="btn-primary">🔍 从当前页面提取链接</button>
-    <button id="openHistoryBtn" class="btn-warning">📱 打开历史文章页面</button>
-    <button id="fetchAccountBtn" class="btn-secondary">📋 获取文章列表</button>
+    <div id="loginStatusBox" class="login-status logged-out">
+      <div class="status-info">
+        <span class="status-icon">🔴</span>
+        <div class="status-text">
+          <h4 id="loginStatusText">未登录</h4>
+          <p id="loginStatusDetail">需要登录公众号后台</p>
+        </div>
+      </div>
+    </div>
+    
+    <button id="loginMPBtn" class="btn-warning">🔑 登录公众号后台</button>
+    <button id="logoutMPBtn" class="btn-danger" style="display: none;">🚪 退出登录</button>
     
     <div style="margin-top: 10px;">
-      <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #666;">或手动输入历史文章页面链接：</label>
-      <input type="text" id="historyPageUrl" class="url-input" placeholder="粘贴历史文章页面链接（可选）" style="width: 100%; padding: 8px; margin-bottom: 5px;">
+      <button id="extractFromCurrentBtn" class="btn-success" style="font-size: 13px; padding: 10px;">
+        📍 从当前页面提取Token
+      </button>
     </div>
     
-    <div id="accountInfo" style="display: none;"></div>
-    <div id="articleList" style="display: none;">
-      <div class="select-controls">
-        <button id="selectAllBtn">全选</button>
-        <button id="selectNoneBtn">取消</button>
-        <button id="selectInvertBtn">反选</button>
+    <details>
+      <summary>💡 使用帮助（点击展开）</summary>
+      <div>
+        <p style="margin-bottom: 8px;"><strong>方法1：自动登录（推荐）</strong></p>
+        <ol style="margin-bottom: 12px;">
+          <li>点击"登录公众号后台"</li>
+          <li>微信扫码登录</li>
+          <li>等待自动提取Token</li>
+        </ol>
+        
+        <p style="margin-bottom: 8px;"><strong>方法2：从当前页面提取</strong></p>
+        <ol style="margin-bottom: 12px;">
+          <li>先在浏览器中手动登录 mp.weixin.qq.com</li>
+          <li>登录后停留在后台页面</li>
+          <li>点击"从当前页面提取Token"</li>
+        </ol>
+        
+        <p style="margin-bottom: 8px;"><strong>方法3：手动输入（备用）</strong></p>
+        <ol>
+          <li>登录后查看URL中的 token= 参数</li>
+          <li>例如：token=450735061</li>
+          <li>点击下方"手动输入Token"按钮</li>
+          <li>输入纯数字Token</li>
+        </ol>
       </div>
-      <div class="article-list" id="articleListContent"></div>
-      <button id="downloadSelectedBtn">下载选中文章</button>
+    </details>
+    
+    <div style="margin-top: 10px; display: flex; gap: 8px;">
+      <button id="debugLoginBtn" class="btn-secondary" style="flex: 1; font-size: 12px; padding: 8px;">
+        🔧 调试
+      </button>
+      <button id="manualTokenBtn" class="btn-secondary" style="flex: 1; font-size: 12px; padding: 8px;">
+        ⌨️ 手动输入
+      </button>
     </div>
-    <div id="loadingArticles" class="loading" style="display: none;">正在获取文章列表</div>
+    
+    <div id="searchSection" class="search-section" style="display: none;">
+      <input 
+        type="text" 
+        id="mpAccountName" 
+        class="url-input" 
+        placeholder="输入公众号名称（如：人民日报）"
+      />
+      <button id="searchMPAccountBtn" class="btn-success">🔍 搜索公众号文章</button>
+      
+      <div id="accountInfo" style="display: none;"></div>
+      
+      <div id="mpArticleList" style="display: none;">
+        <div class="select-controls">
+          <button id="selectAllMPBtn">全选</button>
+          <button id="selectNoneMPBtn">取消</button>
+          <button id="selectInvertMPBtn">反选</button>
+        </div>
+        <div class="article-list" id="mpArticleListContent"></div>
+        <button id="downloadMPSelectedBtn">下载选中文章</button>
+      </div>
+    </div>
+    
+    <div id="loadingMP" class="loading" style="display: none;">正在搜索文章</div>
   </div>
   
   <!-- 进度条 -->
