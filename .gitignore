@@ -25,7 +25,8 @@ ENV/
 
 # 输出文件
 output/
-*.md
+# 保留重要文档，只忽略输出目录下的markdown
+# output/*.md
 
 # IDE
 .vscode/

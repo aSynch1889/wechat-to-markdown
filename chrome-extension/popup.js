@@ -11,10 +11,27 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
-// 页面加载时检查登录状态
+// 页面加载时检查登录状态和下载进度
 window.addEventListener('load', () => {
   checkLoginStatus();
+  checkDownloadProgress();
 });
+
+// 检查是否有正在进行的下载任务
+async function checkDownloadProgress() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'getDownloadProgress'
+    });
+    
+    if (response && response.status === 'downloading') {
+      showProgress(response.current, response.total);
+      startProgressMonitor(response.total);
+    }
+  } catch (error) {
+    // 忽略错误
+  }
+}
 
 // ==================== 单篇转换 ====================
 document.getElementById('convertBtn').addEventListener('click', async () => {
@@ -101,6 +118,7 @@ async function batchConvert() {
   button.textContent = '开始批量转换';
 }
 
+// 保留旧方法用于批量转换标签页（单篇转换仍使用标签页方式）
 async function convertUrlToMarkdown(url) {
   return new Promise((resolve, reject) => {
     chrome.tabs.create({ url, active: false }, async (tab) => {
@@ -133,6 +151,40 @@ async function convertUrlToMarkdown(url) {
 // 检查登录状态
 async function checkLoginStatus() {
   try {
+    // 首先检查当前标签页是否在公众号后台，如果是则尝试自动提取token
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab && tab.url && tab.url.includes('mp.weixin.qq.com') && tab.url.includes('token=')) {
+        console.log('检测到当前标签页有token，自动提取...');
+        const urlParams = new URL(tab.url);
+        const token = urlParams.searchParams.get('token');
+        
+        if (token && /^\d+$/.test(token)) {
+          const cookies = await chrome.cookies.getAll({
+            url: 'https://mp.weixin.qq.com'
+          });
+          
+          const credentials = {
+            token: token,
+            timestamp: Date.now(),
+            cookies: cookies.map(c => ({ 
+              name: c.name, 
+              value: c.value,
+              domain: c.domain
+            })),
+            extractMethod: 'auto_detect'
+          };
+          
+          await chrome.storage.local.set({ mpCredentials: credentials });
+          updateLoginUI(true, credentials);
+          return true;
+        }
+      }
+    } catch (error) {
+      console.log('检查当前标签页token失败:', error);
+    }
+    
+    // 检查存储的token
     const { mpCredentials } = await chrome.storage.local.get('mpCredentials');
     
     if (mpCredentials && mpCredentials.token) {
@@ -387,6 +439,9 @@ document.getElementById('searchMPAccountBtn').addEventListener('click', async ()
   await searchMPAccount();
 });
 
+let currentSearchInterval = null;
+let currentSearchAccount = null;
+
 async function searchMPAccount() {
   const accountName = document.getElementById('mpAccountName').value.trim();
   
@@ -396,11 +451,83 @@ async function searchMPAccount() {
   }
   
   const button = document.getElementById('searchMPAccountBtn');
+  const cancelBtn = document.getElementById('cancelSearchBtn');
   const loading = document.getElementById('loadingMP');
+  
+  // 先检查缓存
+  try {
+    const cacheResponse = await chrome.runtime.sendMessage({
+      action: 'getCachedArticles',
+      accountName: accountName
+    });
+    
+    if (cacheResponse && cacheResponse.articles && cacheResponse.articles.length > 0) {
+      const useCache = confirm(`发现缓存数据（${cacheResponse.articles.length} 篇文章），是否使用缓存？\n\n点击"确定"使用缓存，点击"取消"重新搜索。`);
+      if (useCache) {
+        displayMPArticleList(cacheResponse.articles, accountName);
+        showStatus(`✓ 从缓存加载 ${cacheResponse.articles.length} 篇文章${cacheResponse.incomplete ? '（未完成）' : ''}`, 'success');
+        return;
+      }
+    }
+  } catch (error) {
+    console.log('检查缓存失败:', error);
+  }
   
   button.disabled = true;
   button.textContent = '搜索中...';
+  cancelBtn.style.display = 'block';
   loading.style.display = 'block';
+  loading.textContent = '正在搜索公众号...';
+  currentSearchAccount = accountName;
+  
+  // 清除之前的文章列表显示
+  document.getElementById('mpArticleList').style.display = 'none';
+  document.getElementById('accountInfo').style.display = 'none';
+  
+  // 启动进度监听（实时更新已获取的文章）
+  let lastArticleCount = 0;
+  currentSearchInterval = setInterval(async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getSearchProgress'
+      });
+      
+      if (response) {
+        const progress = response.progress;
+        const articles = response.articles || [];
+        
+        if (progress && progress.status) {
+          if (progress.message) {
+            loading.textContent = progress.message;
+          }
+          
+          // 实时显示已获取的文章（增量更新）
+          if (articles.length > lastArticleCount) {
+            displayMPArticleList(articles, accountName, true); // true表示增量更新
+            lastArticleCount = articles.length;
+          }
+          
+          if (progress.status === 'completed' || progress.status === 'error') {
+            clearInterval(currentSearchInterval);
+            currentSearchInterval = null;
+            
+            // 最终显示所有文章
+            if (articles.length > 0) {
+              displayMPArticleList(articles, accountName);
+              showStatus(`✓ 找到 ${articles.length} 篇文章`, 'success');
+            }
+            
+            button.disabled = false;
+            button.textContent = '🔍 搜索公众号文章';
+            cancelBtn.style.display = 'none';
+            loading.style.display = 'none';
+          }
+        }
+      }
+    } catch (error) {
+      // 忽略错误
+    }
+  }, 500);
   
   try {
     const { mpCredentials } = await chrome.storage.local.get('mpCredentials');
@@ -409,51 +536,151 @@ async function searchMPAccount() {
       throw new Error('未登录，请先登录公众号后台');
     }
     
-    const response = await chrome.runtime.sendMessage({
+    // 异步启动搜索（不等待完成，让它在后台运行）
+    chrome.runtime.sendMessage({
       action: 'searchMPArticles',
       accountName: accountName,
       credentials: mpCredentials
+    }, (response) => {
+      if (currentSearchInterval) {
+        clearInterval(currentSearchInterval);
+        currentSearchInterval = null;
+      }
+      
+      if (chrome.runtime.lastError) {
+        showStatus('✗ ' + chrome.runtime.lastError.message, 'error');
+        button.disabled = false;
+        button.textContent = '🔍 搜索公众号文章';
+        cancelBtn.style.display = 'none';
+        loading.style.display = 'none';
+        return;
+      }
+      
+      console.log('搜索响应:', response);
+      
+      if (response.success && response.articles && response.articles.length > 0) {
+        displayMPArticleList(response.articles, accountName);
+        showStatus(`✓ 找到 ${response.articles.length} 篇文章${response.fromCache ? '（来自缓存）' : ''}`, 'success');
+      } else if (response.error && response.error !== '搜索已取消') {
+        showStatus(response.error || '未找到文章', 'warning');
+      }
+      
+      button.disabled = false;
+      button.textContent = '🔍 搜索公众号文章';
+      cancelBtn.style.display = 'none';
+      loading.style.display = 'none';
     });
     
-    if (response.success && response.articles && response.articles.length > 0) {
-      displayMPArticleList(response.articles, accountName);
-      showStatus(`✓ 找到 ${response.articles.length} 篇文章`, 'success');
-    } else {
-      showStatus(response.error || '未找到文章', 'warning');
-    }
+    // 不等待完成，让搜索在后台进行
+    showStatus('✓ 搜索任务已启动，可在后台继续运行', 'info');
   } catch (error) {
+    if (currentSearchInterval) {
+      clearInterval(currentSearchInterval);
+      currentSearchInterval = null;
+    }
     showStatus('✗ ' + error.message, 'error');
-  } finally {
     button.disabled = false;
     button.textContent = '🔍 搜索公众号文章';
+    cancelBtn.style.display = 'none';
     loading.style.display = 'none';
   }
 }
 
+// 取消搜索
+document.getElementById('cancelSearchBtn').addEventListener('click', async () => {
+  if (currentSearchInterval) {
+    clearInterval(currentSearchInterval);
+    currentSearchInterval = null;
+  }
+  
+  try {
+    await chrome.runtime.sendMessage({
+      action: 'cancelSearch'
+    });
+    
+    const button = document.getElementById('searchMPAccountBtn');
+    const cancelBtn = document.getElementById('cancelSearchBtn');
+    const loading = document.getElementById('loadingMP');
+    
+    button.disabled = false;
+    button.textContent = '🔍 搜索公众号文章';
+    cancelBtn.style.display = 'none';
+    loading.style.display = 'none';
+    
+    // 显示已获取的文章（如果有）
+    const response = await chrome.runtime.sendMessage({
+      action: 'getSearchProgress'
+    });
+    
+    if (response && response.articles && response.articles.length > 0) {
+      displayMPArticleList(response.articles, currentSearchAccount);
+      showStatus(`搜索已取消，已获取 ${response.articles.length} 篇文章`, 'warning');
+    } else {
+      showStatus('搜索已取消', 'info');
+    }
+  } catch (error) {
+    showStatus('✗ 取消搜索失败: ' + error.message, 'error');
+  }
+});
+
 // 显示文章列表
-function displayMPArticleList(articles, accountName) {
+function displayMPArticleList(articles, accountName, incremental = false) {
+  console.log('displayMPArticleList 被调用，文章数量:', articles.length, '增量更新:', incremental);
+  
   const container = document.getElementById('mpArticleListContent');
   const articleList = document.getElementById('mpArticleList');
   const accountInfo = document.getElementById('accountInfo');
   
+  if (!container || !articleList || !accountInfo) {
+    console.error('找不到必要的DOM元素');
+    return;
+  }
+  
   accountInfo.innerHTML = `
     <div class="account-name">${accountName}</div>
-    <div class="account-meta">共找到 ${articles.length} 篇文章</div>
+    <div class="account-meta">已获取 ${articles.length} 篇文章${incremental ? '（正在搜索中...）' : ''}</div>
   `;
   accountInfo.style.display = 'block';
   
-  container.innerHTML = articles.map((article, index) => `
-    <div class="article-item">
-      <input type="checkbox" class="article-checkbox" data-index="${index}" checked>
-      <div class="article-info">
-        <div class="article-title">${article.title}</div>
-        <div class="article-meta">${article.date || ''} ${article.author ? '· ' + article.author : ''}</div>
+  if (incremental) {
+    // 增量更新：只添加新文章
+    const existingCount = container.querySelectorAll('.article-item').length;
+    const newArticles = articles.slice(existingCount);
+    
+    if (newArticles.length > 0) {
+      const html = newArticles.map((article, index) => `
+        <div class="article-item">
+          <input type="checkbox" class="article-checkbox" data-index="${existingCount + index}" checked>
+          <div class="article-info">
+            <div class="article-title">${article.title || '无标题'}</div>
+            <div class="article-meta">${article.date || ''} ${article.author ? '· ' + article.author : ''}</div>
+          </div>
+        </div>
+      `).join('');
+      
+      container.insertAdjacentHTML('beforeend', html);
+    }
+  } else {
+    // 完整更新：重新渲染所有文章
+    const html = articles.map((article, index) => `
+      <div class="article-item">
+        <input type="checkbox" class="article-checkbox" data-index="${index}" checked>
+        <div class="article-info">
+          <div class="article-title">${article.title || '无标题'}</div>
+          <div class="article-meta">${article.date || ''} ${article.author ? '· ' + article.author : ''}</div>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `).join('');
+    
+    container.innerHTML = html;
+  }
   
   articleList.style.display = 'block';
   chrome.storage.local.set({ pendingArticles: articles });
+  
+  // 验证实际显示的文章数量
+  const displayedItems = container.querySelectorAll('.article-item');
+  console.log('实际显示的文章项数量:', displayedItems.length);
 }
 
 // 选择控制
@@ -469,7 +696,7 @@ document.getElementById('selectInvertMPBtn').addEventListener('click', () => {
   document.querySelectorAll('.article-checkbox').forEach(cb => cb.checked = !cb.checked);
 });
 
-// 下载选中文章
+// 下载选中文章（使用无头模式，支持后台运行）
 document.getElementById('downloadMPSelectedBtn').addEventListener('click', async () => {
   const checkboxes = document.querySelectorAll('.article-checkbox:checked');
   
@@ -489,25 +716,97 @@ document.getElementById('downloadMPSelectedBtn').addEventListener('click', async
   
   showProgress(0, selectedArticles.length);
   
-  let successCount = 0;
+  // 启动进度监听（即使popup关闭也能继续下载）
+  startProgressMonitor(selectedArticles.length);
   
-  for (let i = 0; i < selectedArticles.length; i++) {
-    try {
-      await convertUrlToMarkdown(selectedArticles[i].url);
-      successCount++;
-    } catch (error) {
-      console.error('下载失败:', error);
-    }
-    updateProgress(i + 1, selectedArticles.length);
-    await sleep(1500);
+  try {
+    // 获取凭证
+    const { mpCredentials } = await chrome.storage.local.get('mpCredentials');
+    
+    // 发送到background.js进行无头下载（支持后台运行）
+    // 注意：这个操作是异步的，不会阻塞，下载会在后台继续
+    chrome.runtime.sendMessage({
+      action: 'downloadArticles',
+      articles: selectedArticles,
+      credentials: mpCredentials || {}
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('发送下载请求失败:', chrome.runtime.lastError);
+        showStatus('✗ ' + chrome.runtime.lastError.message, 'error');
+        button.disabled = false;
+        button.textContent = '下载选中文章';
+        hideProgress();
+        return;
+      }
+      
+      if (response && response.success) {
+        // 进度监听会更新状态，这里不需要额外处理
+        console.log('下载任务已启动');
+      } else {
+        showStatus('✗ ' + (response?.error || '下载失败'), 'error');
+        button.disabled = false;
+        button.textContent = '下载选中文章';
+        hideProgress();
+      }
+    });
+    
+    // 不等待完成，让下载在后台进行
+    showStatus('✓ 下载任务已启动，可在后台继续运行', 'info');
+  } catch (error) {
+    showStatus('✗ ' + error.message, 'error');
+    button.disabled = false;
+    button.textContent = '下载选中文章';
+    hideProgress();
   }
-  
-  hideProgress();
-  showStatus(`✓ 已下载 ${successCount}/${selectedArticles.length} 篇文章`, 'success');
-  
-  button.disabled = false;
-  button.textContent = '下载选中文章';
 });
+
+// 启动进度监听
+function startProgressMonitor(total) {
+  let progressInterval;
+  
+  const checkProgress = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getDownloadProgress'
+      });
+      
+      if (response) {
+        updateProgress(response.current, response.total);
+        
+        if (response.status === 'completed') {
+          if (progressInterval) {
+            clearInterval(progressInterval);
+          }
+          const button = document.getElementById('downloadMPSelectedBtn');
+          if (button) {
+            button.disabled = false;
+            button.textContent = '下载选中文章';
+          }
+          showStatus(`✓ 下载完成！成功: ${response.success || 0}, 失败: ${response.failed || 0}`, 'success');
+          hideProgress();
+        }
+      }
+    } catch (error) {
+      // popup可能已关闭，忽略错误
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+    }
+  };
+  
+  // 立即检查一次
+  checkProgress();
+  
+  // 然后每秒检查一次
+  progressInterval = setInterval(checkProgress, 1000);
+  
+  // 30分钟后自动停止监听
+  setTimeout(() => {
+    if (progressInterval) {
+      clearInterval(progressInterval);
+    }
+  }, 30 * 60 * 1000);
+}
 
 // ==================== 工具函数 ====================
 

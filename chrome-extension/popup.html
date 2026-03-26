@@ -521,7 +521,10 @@
         class="url-input" 
         placeholder="输入公众号名称（如：人民日报）"
       />
-      <button id="searchMPAccountBtn" class="btn-success">🔍 搜索公众号文章</button>
+      <div style="display: flex; gap: 8px;">
+        <button id="searchMPAccountBtn" class="btn-success" style="flex: 1;">🔍 搜索公众号文章</button>
+        <button id="cancelSearchBtn" class="btn-danger" style="flex: 0; display: none; padding: 12px 16px;">取消</button>
+      </div>
       
       <div id="accountInfo" style="display: none;"></div>
       
